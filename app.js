@@ -9,8 +9,8 @@ import {
   formatNumber,
   makeSnapshot,
   searchRecords,
-} from "./src/domain.mjs?v=20260908-ux8";
-import { importWorkbookFile, MAX_WORKBOOK_BYTES, validateImport } from "./src/importer.mjs?v=20260908-ux8";
+} from "./src/domain.mjs?v=20260908-ux9";
+import { importWorkbookFile, MAX_WORKBOOK_BYTES, validateImport } from "./src/importer.mjs?v=20260908-ux9";
 import { listDatabases, saveDatabase, loadWorkspace, saveWorkspace, storageDescription } from "./src/storage.mjs";
 
 const app = document.querySelector("#app");
