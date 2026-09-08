@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+*.xlsx
+*.xlsm
+*.xlsb
+*.xls
+uploads/
+tmp/
