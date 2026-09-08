@@ -5,7 +5,7 @@ const FIELD_PATTERNS = {
   description: [/description/, /equipment.*description/, /item.*description/, /^item$/, /^name$/, /asset.*name/],
   equipmentType: [/equipment.*type/, /asset.*type/, /category/, /class/, /type/],
   voltage: [/voltage/, /kv\b/, /rated.*u/],
-  rating: [/rating/, /capacity/, /mva\b/, /mw\b/, /power/],
+  rating: [/\brating\b/, /capacity/, /mva\b/, /mw\b/, /breaking\s*current/, /power\s*rating/],
   manufacturer: [/manufacturer/, /make/, /oem/, /supplier/],
   sourceProject: [/project/, /contract/, /reference.*project/, /scheme/],
   supplier: [/supplier/, /vendor/, /manufacturer/],

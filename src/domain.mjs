@@ -303,8 +303,37 @@ export function normalise(value) {
   return String(value ?? "").toLowerCase().replace(/[–—−]/g, "-").replace(/\bkilovolt(s)?\b/g, "kv").replace(/\bmegavolt.?ampere(s)?\b/g, "mva").replace(/square\s*millimet(er|re)s?/g, "mm2").replace(/[^a-z0-9.]+/g, " ").trim();
 }
 
+function searchableRecordText(record) {
+  const rawValues = (record.rawValues || []).flatMap((value) => [value.cell, value.heading, value.rawValue, value.formula]);
+  const components = (record.components || []).flatMap((componentRecord) => [componentRecord.name, componentRecord.componentType, componentRecord.rawValue, componentRecord.calculationBase, componentRecord.note]);
+  return [
+    record.description,
+    record.database,
+    record.workbook,
+    record.revision,
+    record.sheet,
+    record.row,
+    record.cell,
+    record.reference,
+    record.page,
+    record.sourceProject,
+    record.supplier,
+    record.year,
+    record.country,
+    record.currency,
+    record.unit,
+    record.quality,
+    record.qualityReason,
+    record.source?.cell,
+    record.source?.heading,
+    ...Object.entries(record.attributes || {}).flat(),
+    ...components,
+    ...rawValues,
+  ].filter((value) => value !== null && value !== undefined && value !== "").join(" ");
+}
+
 function tokenMatch(query, record) {
-  const haystack = normalise([record.description, record.attributes.equipmentType, ...Object.values(record.attributes)].join(" "));
+  const haystack = normalise(searchableRecordText(record));
   const tokens = normalise(query).split(/\s+/).filter(Boolean);
   const words = new Set(haystack.split(/\s+/));
   return tokens.filter((token) => words.has(token) || (!/^\d+(?:\.\d+)?$/.test(token) && haystack.includes(token))).length;
