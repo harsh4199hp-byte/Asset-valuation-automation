@@ -369,7 +369,7 @@ export function searchRecords(records, filters = {}) {
   const queryRequested = Boolean(normalise(filters.query ?? ""));
   return records
     .map((record) => ({ record, ...scoreRecord(record, filters) }))
-    .filter((result) => (!requestedType || normalise(result.record.attributes.equipmentType) === normalise(requestedType)) && (!filters.manufacturer || filters.manufacturer === "Any manufacturer" || normalise(result.record.attributes.manufacturer) === normalise(filters.manufacturer)) && (!filters.country || filters.country === "Any country" || normalise(result.record.country) === normalise(filters.country)) && (queryRequested ? result.scoreBreakdown.queryHits > 0 : result.score > 0 || !requestedType))
+    .filter((result) => (!requestedType || normalise(result.record.attributes.equipmentType) === normalise(requestedType)) && (!filters.manufacturer || filters.manufacturer === "Any manufacturer" || normalise(result.record.attributes.manufacturer) === normalise(filters.manufacturer)) && (!filters.country || filters.country === "Any country" || normalise(result.record.country) === normalise(filters.country)) && (queryRequested ? result.scoreBreakdown.queryHits === normalise(filters.query ?? "").split(/\s+/).filter(Boolean).length : result.score > 0 || !requestedType))
     .sort((a, b) => b.score - a.score || Number(b.record.year) - Number(a.record.year));
 }
 
