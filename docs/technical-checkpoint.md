@@ -9,6 +9,8 @@ The brief names:
 
 Neither binary file was present in the workspace or the checked OneDrive/Downloads locations. Consequently, no workbook-specific claim below is treated as verified, no golden source record was fabricated, and the real-file quality gates remain open.
 
+The application now includes a pinned, vendored SheetJS CE 0.20.3 adapter for local XLSX/XLSM/XLSB/XLS parsing, a Select → Analyse → Mapping → Validation → Preview → Import flow, IndexedDB source persistence, pattern-driven horizontal price-column extraction, fixed-point calculations, explicit production/demo modes and nine-sheet XLSX export. These generic capabilities are tested with synthetic fixtures; they do not replace golden tests against the named workbooks.
+
 ## Findings from the brief to recheck
 
 The Transmission workbook is described as having a broad `Price List` with repeated historical project/source blocks, while the Generating Stations `Price List` is materially narrower. The brief also describes a Transmission build-up with procurement/CIP, local transport, erection & commissioning and owner's cost, plus percentage assumptions and escalation factors. These are design hypotheses until the files are imported and formulas are inspected.
