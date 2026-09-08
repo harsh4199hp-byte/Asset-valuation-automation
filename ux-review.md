@@ -34,9 +34,11 @@ The revised experience is organised around the user’s likely sequence:
 
 - `node --check app.js` passed.
 - Domain, money and importer tests passed.
-- Golden workbook tests were skipped because the named FAR/price workbooks are not present in this workspace.
+- Golden workbook tests were skipped because the named FAR/price workbooks are not present in the repository workspace; the supplied files were tested through the deployed browser workflow instead.
 - Local browser smoke test passed for: home, demo search, keyword search, selectable source handoff, price builder, estimate review, production empty state, workbook analysis, mapping review and validation blocking.
 - The available non-price workbook `IEC_Cable_Sizing_110kV_Template.xlsx` was correctly blocked at validation with zero candidate source rows.
-- Browser runtime logs were empty during the smoke test.
+- The supplied KGL XLSB was analysed and imported locally: 8 worksheets, 3,699 candidate rows, mapping review, validation warnings, preview and commit all completed. Testing exposed two data-scale edge cases: unresolved currency text could crash display formatting, and an empty search could attempt to render thousands of cards. The deployed fix shows unresolved money as `Review`, prevents rows without a valid ISO currency from being selected as estimate bases, and limits the initial result window while keeping the full match count visible.
+- After the fix, KGL search remained responsive with 12 initial cards / 36 cards for a focused query, the invalid-currency source displayed `Review` without runtime errors, and a valid source opened the builder with its component and lineage details intact. Browser runtime logs were empty.
+- The supplied Transmission XLSM is 76.6 MB and is rejected by the documented 50 MB local safety limit before parsing; its bytes were not uploaded or stored.
 
 This review improves usability and discoverability; it does not replace engineer review of source workbooks or establish production pricing data.
