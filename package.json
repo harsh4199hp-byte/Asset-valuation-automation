@@ -1,10 +1,10 @@
 {
   "name": "asset-valuation-automation",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node tests/domain.test.mjs"
+    "test": "node tests/domain.test.mjs && node tests/money.test.mjs && node tests/importer.test.mjs && node tests/golden.test.mjs"
   }
 }

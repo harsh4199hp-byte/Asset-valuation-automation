@@ -4,16 +4,18 @@ Asset Valuation Automation is a traceability-first workspace for engineering cos
 
 ## Current build
 
-This first local build is a no-dependency browser prototype served by Node.js. It demonstrates the core workflow:
+This is a static, browser-local application served by Node.js for local development and deployable to GitHub Pages. The pinned SheetJS CE 0.20.3 browser build is vendored in `vendor/xlsx.full.min.js`, so workbook parsing has no runtime CDN dependency. The application supports this workflow:
 
-1. search actual-looking source records while keeping exact and similar matches separate;
-2. inspect file/sheet/row/reference lineage;
-3. select a source explicitly and configure components, escalation, location factor and quantity;
-4. add multiple lines to a project estimate;
-5. apply optional, user-entered indirect costs;
-6. snapshot a revision and download a traceability workbook with nine sheets.
+1. import XLSX, XLSM, XLSB or XLS locally;
+2. fingerprint, analyse meaningful ranges and propose pattern-driven mappings;
+3. validate and preview rows before committing a local IndexedDB database;
+4. search imported source records while keeping exact/strong and similar matches separate;
+5. inspect cell-level lineage, components and formulas;
+6. select a source explicitly and configure components, escalation, location factor and quantity;
+7. add multiple lines to a project estimate, apply optional user-entered indirect costs and snapshot a revision;
+8. export a sanitized traceability workbook with nine sheets.
 
-The included records are a clearly labelled training fixture. They are not extracted from the two workbooks named in the product brief, because those files were not present in the workspace. No commercial or valuation decision should use the fixture.
+Production mode starts empty. The included records are a clearly labelled training fixture that can only be enabled explicitly. They are not extracted from the two workbooks named in the product brief, because those files were not present in the workspace. No commercial or valuation decision should use the fixture.
 
 ## Run locally
 
@@ -21,17 +23,22 @@ The included records are a clearly labelled training fixture. They are not extra
 node server.mjs
 ```
 
-Then open `http://127.0.0.1:4173`. No package install is required. Unit tests:
+Then open `http://127.0.0.1:4173`. No package install is required because the parser build is vendored. Unit tests:
 
 ```text
 node tests/domain.test.mjs
+node tests/money.test.mjs
+node tests/importer.test.mjs
+node tests/golden.test.mjs
 ```
 
 ## Important limitations
 
-- Workbook upload currently hashes and classifies a local file, then stops before commit; deterministic XLSX/XLSM/XLSB adapters and a reviewable mapping store are the next implementation boundary.
-- Persistence, multi-user authentication, server-side authorization and approved statistical index retrieval are not yet wired.
-- The demo index catalogue and source records are illustrative. The UI refuses to recommend a location factor and makes any user override visible.
-- Existing-asset cards are placeholders. FAR formula reverse-engineering must happen against the real files before DCRV calculations are implemented.
+- The named Transmission XLSM and KGL Generating Stations XLSB files were not available for this build. Their workbook-specific sheets, formulas, source cells, component semantics and golden values remain unverified. The automated golden test reports this as skipped rather than inventing expected values.
+- The importer is pattern-driven and preserves source cells/formulas, but complex merged blocks, stale formula caches, external links and source-specific semantics still require reviewer confirmation.
+- Persistence is browser-local IndexedDB. There is no server-side authentication, multi-user authorization or confidential shared storage on GitHub Pages.
+- Production mode exposes no fake index catalogue. The training demo contains illustrative index observations and records only when explicitly enabled.
+- Country adjustment is explicitly unadjusted unless an approved factor is entered; no factor is inferred from country names.
+- Existing-asset/FAR valuation remains gated. No DCRV or useful-life result is generated until the real FAR methods are reverse-engineered and independently reproduced.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`docs/technical-checkpoint.md`](./docs/technical-checkpoint.md) for the implementation checkpoint.
