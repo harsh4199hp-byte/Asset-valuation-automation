@@ -225,11 +225,11 @@ function parseSheetRecords(sheetName, sheet, matrix, range, fileMeta, mapping) {
       const year = inferYear(row[mappedColumns.year], `${priceColumn.header} ${headers.join(" ")}`);
       const reference = text(row[mappedColumns.reference]) || `${sheetName}!${cellAddress(range.startRow + rowIndex, range.startCol + priceColumn.col)}`;
       const source = sourceCell(sheet, range.startRow + rowIndex, range.startCol + priceColumn.col, row[priceColumn.col], priceColumn.header);
-      const recordKey = `${fileMeta.hash}:${sheetName}:${range.startRow + rowIndex}:${range.startCol + priceColumn.col}`;
+      const recordId = `import-${fileMeta.hash.slice(0, 16)}-${slug(sheetName)}-${range.startRow + rowIndex + 1}-${range.startCol + priceColumn.col + 1}`;
       const numericFields = headers.map((header, col) => ({ header, col, value: parseNumber(row[col]) })).filter((item) => Number.isFinite(item.value));
       const qualityFields = [description, year, reference, inferCurrency(row[mappedColumns.currency], priceColumn.header) !== "Unknown / review"].filter(Boolean).length;
       candidates.push({
-        id: `import-${slug(recordKey)}`,
+        id: recordId,
         databaseId: fileMeta.hash,
         database: fileMeta.fileName,
         revision: fileMeta.revision,
