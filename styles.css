@@ -251,6 +251,36 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (max-width: 620px) { .top-actions .avatar { display: none; }.env-pill { font-size: 10px; }.content { padding: 23px 13px 45px; }.topbar { padding: 0 13px; height: 60px; }.grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }.workflow { grid-template-columns: 1fr; }.search-bar { grid-template-columns: 1fr; }.filter-strip .select { width: 100%; }.result-card, .result-card.similar { grid-template-columns: 1fr; gap: 9px; margin-left: 0; margin-right: 0; padding: 14px 0; }.result-card > :nth-child(4), .result-card > :nth-child(5) { display: block; }.result-actions { justify-content: flex-start; }.calc-strip { grid-template-columns: repeat(2, 1fr); }.form-grid, .radio-row { grid-template-columns: 1fr; }.detail-item { grid-template-columns: 1fr; gap: 2px; }.cost-row { align-items: flex-start; flex-direction: column; }.database-row { grid-template-columns: 1fr auto; }.database-row > :last-child { grid-column: 2; grid-row: 1; }.wizard-steps { overflow-x: auto; grid-template-columns: repeat(6, minmax(85px, 1fr)); }.wizard-step { font-size: 9px; }.gate-card { padding: 28px 17px; }.page-actions .btn { flex: 1; }.page-actions { width: 100%; }.page-actions .btn { min-width: 140px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 
+/* Spreadsheet-style source comparison. Keep the table dense enough for review,
+   but give every value a readable label and preserve horizontal scrolling on
+   smaller screens instead of collapsing columns into an ambiguous card. */
+.source-table-wrap { overflow-x: auto; border-top: 1px solid var(--line); }
+.source-table { width: 100%; min-width: 1280px; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.source-table th, .source-table td { padding: 12px 11px; border-bottom: 1px solid var(--line); border-right: 1px solid #eef0ec; vertical-align: top; text-align: left; }
+.source-table th:last-child, .source-table td:last-child { border-right: 0; }
+.source-table thead th { position: sticky; top: 0; z-index: 1; background: #f0f3ef; color: #465149; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.source-table tbody tr:hover td { background: #fffaf6; }
+.source-table .table-group-row th { padding: 14px 11px 9px; background: #fff; color: var(--accent-dark); border-right: 0; font-size: 12px; text-transform: none; letter-spacing: 0; }
+.source-table .table-group-row span { margin-left: 8px; color: var(--muted); font-weight: 500; }
+.source-table .similar-group-row th { color: var(--amber); border-top: 12px solid var(--canvas); }
+.source-table .table-primary { min-width: 170px; font-weight: 800; color: var(--ink); line-height: 1.35; }
+.source-table .table-sub { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.source-table .table-number { text-align: right; white-space: nowrap; }
+.source-table .table-number strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.source-table .table-component { display: flex; justify-content: space-between; gap: 12px; min-width: 190px; padding: 3px 0; }
+.source-table .table-component + .table-component { border-top: 1px dashed #e2e6e1; }
+.source-table .table-component strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.source-table .table-actions { min-width: 145px; white-space: nowrap; }
+.source-table .table-actions .row-action { margin-right: 7px; }
+.source-table .source-row.similar-row td { background: #fffdf7; }
+.source-table .source-row.similar-row:hover td { background: #fff8e9; }
+.source-table .match { display: inline-block; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .source-table-wrap { margin-left: -17px; margin-right: -17px; padding-left: 17px; padding-right: 17px; }
+  .source-table { min-width: 1160px; }
+}
+
 /* Calm, task-led layer for the primary user journey. */
 :root {
   --canvas: #f7f8f6;

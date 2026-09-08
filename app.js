@@ -207,3 +207,64 @@ layout = layoutV2;
 renderDashboard = renderDashboardV2;
 resultCard = resultCardV2;
 renderSearch = renderSearchV2;
+
+// Search is the analyst's main working surface. Keep the full source-row shape
+// visible in a compact spreadsheet-style table so cost years, source cells and
+// component amounts can be compared without opening every result card.
+function isUsefulFilterValue(field, value) {
+  const clean = String(value ?? "").trim();
+  if (!clean || clean.length > 120 || /^(any|all)\b/i.test(clean)) return false;
+  if (field === "voltage" && !/\d|kv|volt/i.test(clean)) return false;
+  if (field === "rating" && !/\d|mva|mw|ka|amp|phase|power/i.test(clean)) return false;
+  return true;
+}
+
+function cleanFilterOptions(field, selected, fallback) {
+  const values = [...new Set(currentRecords().map((record) => field === "country" ? record.country : record.attributes?.[field]).filter((value) => isUsefulFilterValue(field, value)).map((value) => String(value).trim()))].sort((a, b) => a.localeCompare(b));
+  const options = [fallback, ...values];
+  if (selected && selected !== fallback && !options.includes(selected)) options.push(selected);
+  return options;
+}
+
+function filterOptionsV3(field, selected) {
+  const fallbacks = { voltage: "Any voltage", rating: "Any rating", manufacturer: "Any manufacturer", country: "Any country" };
+  return typeOptions(cleanFilterOptions(field, selected, fallbacks[field]), selected);
+}
+
+function componentTableValue(component, currency) {
+  if (["percentage", "percentage_rate"].includes(component.componentType)) return `${(Number(component.rawValue) * 100).toFixed(2)}%`;
+  if (["multiplier", "cumulative_factor"].includes(component.componentType)) return `${Number(component.rawValue).toFixed(4)} ×`;
+  const numeric = Number(component.rawValue);
+  return validCurrency(currency) && Number.isFinite(numeric) ? displayMoney(numeric, currency, 2) : formatNumber(numeric, 2);
+}
+
+function componentTableCell(record) {
+  const components = (record.components || []).filter((component) => component.componentType !== "unknown");
+  if (!components.length) return `<span class="muted">No mapped cost components</span>`;
+  return components.map((component) => `<div class="table-component"><span>${esc(component.name || "Unnamed component")}</span><strong>${esc(componentTableValue(component, record.currency))}</strong></div>`).join("");
+}
+
+function resultTableRow(result, similar = false) {
+  const record = result.record;
+  const basis = safeBasis(record);
+  const selectable = !similar && result.matchClass !== "Similar / closest available" && validCurrency(record.currency);
+  const type = record.attributes?.equipmentType || "Unclassified / review";
+  const sourceCellLabel = `${record.sheet || "Source sheet"}!${record.cell || record.row || "?"}`;
+  return `<tr class="source-row ${similar ? "similar-row" : ""}"><td><div class="table-primary">${esc(record.description || "Unnamed source row")}</div><div class="table-sub">${esc(record.reference || record.sourceProject || "No source reference")}</div></td><td><div>${esc(type)}</div><div class="table-sub">${esc(Object.entries(record.attributes || {}).filter(([key, value]) => key !== "equipmentType" && value).slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(" · ") || "Technical details need review")}</div></td><td>${componentTableCell(record)}</td><td class="table-number"><strong>${basis === null ? "Review" : displayMoney(basis, record.currency)}</strong><div class="table-sub">Historical source price</div></td><td class="table-number"><strong>${esc(record.year ?? "Unknown / review")}</strong><div class="table-sub">Cost year</div></td><td><strong>${esc(record.currency || "Unknown / review")}</strong><div class="table-sub">${esc(record.unit || "Unit not stated")}</div></td><td><div class="mono">${esc(sourceCellLabel)}</div><div class="table-sub">${esc(record.workbook || record.database || "Source workbook")}</div></td><td><span class="match ${similar ? "similar" : "exact"}">${esc(similar ? "Compare only" : result.matchClass)}</span><div class="table-sub">${esc(record.quality || "Review")}</div></td><td class="table-actions"><button class="row-action" data-action="view-source" data-id="${esc(record.id)}">Inspect</button>${selectable ? `<button class="btn btn-sm btn-primary" data-action="open-builder" data-id="${esc(record.id)}" data-match-class="${esc(result.matchClass)}">Use source</button>` : `<span class="comparison-note">${similar ? "Comparison only" : "Currency needs review"}</span>`}</td></tr>`;
+}
+
+function renderSearchTable() {
+  const results = currentResults();
+  const exact = results.filter((result) => result.matchClass !== "Similar / closest available");
+  const similar = results.filter((result) => result.matchClass === "Similar / closest available");
+  const exactToShow = exact.slice(0, 180);
+  const similarToShow = similar.slice(0, 70);
+  const types = ["All equipment", ...new Set(currentRecords().map((record) => record.attributes?.equipmentType).filter((value) => isUsefulFilterValue("equipmentType", value)))].sort((a, b) => a.localeCompare(b));
+  const shown = exactToShow.length + similarToShow.length;
+  const capNote = results.length > shown ? `Showing ${shown} of ${results.length}. Add a keyword or filter to narrow the table.` : `${results.length} matching source rows`;
+  const tableRows = `${exactToShow.length ? `<tbody><tr class="table-group-row"><th colspan="9">Selectable source rows <span>${exact.length} total${exact.length > exactToShow.length ? ` · first ${exactToShow.length} shown` : ""}</span></th></tr>${exactToShow.map((result) => resultTableRow(result)).join("")}</tbody>` : ""}${similarToShow.length ? `<tbody><tr class="table-group-row similar-group-row"><th colspan="9">Closest available · comparison only <span>${similar.length} total${similar.length > similarToShow.length ? ` · first ${similarToShow.length} shown` : ""}</span></th></tr>${similarToShow.map((result) => resultTableRow(result, true)).join("")}</tbody>` : ""}`;
+  const table = tableRows ? `<div class="table-wrap source-table-wrap"><table class="source-table"><thead><tr><th>Component / item</th><th>Equipment type & details</th><th>Cost components</th><th>Source cost</th><th>Cost year</th><th>Currency / unit</th><th>Workbook source cell</th><th>Match / quality</th><th>Action</th></tr></thead>${tableRows}</table></div>` : "";
+  return pageHead("Step 1 · Find a source", "Find comparable equipment", "Search every imported field, then compare the cost, cost year, component breakdown and source cell in one table.", `<button class="btn" data-action="navigate" data-page="databases">Import workbook</button><button class="btn btn-primary" data-action="navigate" data-page="estimate">Review estimate (${state.items.length})</button>`) + sourceNotice() + `<div class="card search-panel"><div class="search-intro"><div><div class="eyebrow">Search source evidence</div><h2>What do you want to price?</h2><p>Enter any description, asset ID, segment, technical value, manufacturer, source cell, cost year or currency.</p></div><span class="tag">${results.length} match${results.length === 1 ? "" : "es"}</span></div><label class="field-label" for="search-query">Search all imported fields</label><div class="search-controls"><input id="search-query" class="input search-input" data-field="search-query" value="${esc(state.filters.query)}" placeholder="e.g. transformer, ZGH…, 2023, U7, USD" autocomplete="off"/><button class="btn btn-primary" data-action="apply-search">Find matches</button><button class="btn" data-action="clear-filters">Clear</button></div><div class="filter-row"><div class="field"><label for="equipment-type">Equipment type</label><select id="equipment-type" class="select" data-field="equipmentType">${typeOptions(types, state.filters.equipmentType)}</select></div><div class="field"><label for="voltage">Voltage</label><select id="voltage" class="select" data-field="voltage">${filterOptionsV3("voltage", state.filters.voltage)}</select></div><div class="field"><label for="rating">Rating / capacity</label><select id="rating" class="select" data-field="rating">${filterOptionsV3("rating", state.filters.rating)}</select></div><div class="field"><label for="manufacturer">Manufacturer</label><select id="manufacturer" class="select" data-field="manufacturer">${filterOptionsV3("manufacturer", state.filters.manufacturer)}</select></div><div class="field"><label for="country">Country</label><select id="country" class="select" data-field="country">${filterOptionsV3("country", state.filters.country)}</select></div></div><div class="search-help"><span>Matches include source description, all mapped attributes, raw source cells, workbook/sheet/cell, cost year, currency, components and references.</span><span>Need a different source? <button class="inline-link" data-action="navigate" data-page="databases">Import another workbook</button></span></div></div><div class="card results-panel"><div class="panel-head results-panel-head"><div><div class="eyebrow">Step 2 · Compare costs</div><h2>Excel-style source results</h2><p>Each row is one source price observation. The same component in different years appears on separate rows so historical costs remain auditable.</p></div><span class="mono tiny muted">${esc(capNote)}</span></div>${!currentRecords().length ? `<div class="empty-state"><div class="empty-icon">⌕</div><h3>No source data yet</h3><p>Import and approve a workbook before searching. For a guided walkthrough, enable the training demo in Settings.</p><button class="btn btn-primary" data-action="navigate" data-page="databases">Import source workbook</button><button class="btn" data-action="enable-demo">Use training demo</button></div>` : table || `<div class="no-results"><strong>No matching source rows</strong><span>Try a broader term or clear one of the optional filters.</span></div>`}</div>`;
+}
+
+renderSearch = renderSearchTable;
