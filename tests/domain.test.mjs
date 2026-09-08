@@ -32,6 +32,10 @@ assert.equal(results[0].record.id, "demo-tx-60-2022");
 assert.equal(results[0].exact, true);
 assert(results.some((result) => result.record.id === "demo-tx-75-2021" && result.exact === false));
 
+const lineageSearch = { ...transformer, sheet: "Price List", cell: "U7", reference: "Price List!U7", rawValues: [{ cell: "A7", heading: "Asset Name", rawValue: "Powerhouse" }] };
+assert.equal(searchRecords([lineageSearch], { query: "U7", equipmentType: "All equipment", voltage: "Any voltage", rating: "Any rating", manufacturer: "Any manufacturer", country: "Any country" }).length, 1, "search includes source cell lineage");
+assert.equal(searchRecords([lineageSearch], { query: "2022", equipmentType: "All equipment", voltage: "Any voltage", rating: "Any rating", manufacturer: "Any manufacturer", country: "Any country" }).length, 1, "search includes cost-year values");
+
 const snapshot = makeSnapshot({ name: "Test", targetYear: 2030 }, [{ id: "a", total: 10 }], []);
 assert.equal(snapshot.total, 10);
 assert.equal(snapshot.items[0].total, 10);
