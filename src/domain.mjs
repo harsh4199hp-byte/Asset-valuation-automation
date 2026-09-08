@@ -1,11 +1,6 @@
-/**
- * Deterministic domain layer for the Asset Valuation Automation prototype.
- *
- * Money is represented as decimal strings at the boundary and rounded only
- * for display/export. The browser demo uses Number internally because it has
- * no external decimal dependency; the production Python service must use a
- * decimal type and persist the calculation inputs/outputs.
- */
+import { FixedDecimal } from "./money.mjs";
+
+/** Pure matching and calculation helpers. Demo fixtures are opt-in only. */
 
 export const DEMO_DATA_NOTICE =
   "Training fixture — not an approved production database. No supplied workbook is present in this workspace.";
@@ -30,6 +25,8 @@ export const INDEX_CATALOGUE = [
     sourceUrl: "https://www.bls.gov/ppi/",
   },
 ];
+
+export const DEMO_INDEX_CATALOGUE = INDEX_CATALOGUE;
 
 export const LOCATION_FACTOR_POLICY = {
   recommended: null,
@@ -62,6 +59,8 @@ const source = (id, name, sheet, row, reference, project, year, country, quality
   supplier: "Not stated in fixture",
   year,
   country,
+  currency: "USD",
+  unit: "per unit",
   quality,
   qualityReason,
   sourceFactor: factor,
@@ -212,33 +211,36 @@ export const DEMO_RECORDS = [
 
 export function componentAmount(item, componentRecord, includedOverride = componentRecord.included) {
   if (!includedOverride || componentRecord.componentType === "unknown") return 0;
-  if (componentRecord.componentType === "absolute_usd") return Number(componentRecord.rawValue) || 0;
+  if (["absolute_usd", "absolute_money", "absolute", "per_unit_money"].includes(componentRecord.componentType)) return FixedDecimal.from(componentRecord.rawValue).toNumber();
   if (componentRecord.componentType === "percentage") {
-    const base = item._bases?.[componentRecord.calculationBase] ?? 0;
-    return base * Number(componentRecord.rawValue);
+    const base = FixedDecimal.from(item._bases?.[componentRecord.calculationBase] ?? 0);
+    return base.mul(componentRecord.rawValue).toNumber();
   }
-  if (componentRecord.componentType === "multiplier") return Number(componentRecord.rawValue) || 0;
+  if (["multiplier", "cumulative_factor"].includes(componentRecord.componentType)) {
+    const base = FixedDecimal.from(item._bases?.[componentRecord.calculationBase] ?? 0);
+    return base.mul(componentRecord.rawValue).toNumber();
+  }
   return 0;
 }
 
 export function calculateHistoricalBasis(record, componentState = {}) {
   const included = record.components.map((c) => ({ ...c, included: componentState[c.id] ?? c.includedByDefault }));
-  const bases = { equipment: 0, subtotal_before_owner: 0 };
+  const bases = { equipment: FixedDecimal.from(0), subtotal_before_owner: FixedDecimal.from(0) };
   const fixed = included.find((c) => c.id === "equipment");
-  bases.equipment = fixed && fixed.included ? Number(fixed.rawValue) || 0 : 0;
-  let beforeOwner = 0;
+  bases.equipment = fixed && fixed.included ? FixedDecimal.from(fixed.rawValue) : FixedDecimal.from(0);
+  let beforeOwner = FixedDecimal.from(0);
   const amounts = [];
   for (const c of included) {
     if (c.id === "owner") continue;
     const amount = componentAmount({ _bases: bases }, c, c.included);
     amounts.push({ ...c, amount });
-    beforeOwner += amount;
+    beforeOwner = beforeOwner.add(amount);
   }
   bases.subtotal_before_owner = beforeOwner;
   const owner = included.find((c) => c.id === "owner");
   if (owner) amounts.push({ ...owner, amount: componentAmount({ _bases: bases }, owner, owner.included) });
-  const historicalBasis = amounts.reduce((sum, c) => sum + c.amount, 0);
-  return { amounts, historicalBasis, bases };
+  const historicalBasis = amounts.reduce((sum, c) => sum.add(c.amount), FixedDecimal.from(0));
+  return { amounts, historicalBasis: historicalBasis.toNumber(), bases: { equipment: bases.equipment.toNumber(), subtotal_before_owner: bases.subtotal_before_owner.toNumber() } };
 }
 
 function observationFor(index, year) {
@@ -256,46 +258,56 @@ function observationFor(index, year) {
 export function escalationFor(record, settings) {
   const sourceYear = Number(record.year);
   const targetYear = Number(settings.targetYear);
+  if (!Number.isInteger(sourceYear) || !Number.isInteger(targetYear)) throw new Error("A valid integer source and target year are required.");
   if (settings.method === "none" || sourceYear === targetYear) return { factor: 1, label: "No escalation", basis: "Source year equals target year or method disabled." };
-  if (settings.method === "source") return { factor: Number(record.sourceFactor), label: "Imported source-workbook factor (demo fixture)", basis: "Retained from the source record; confirm semantics before production use." };
+  if (settings.method === "source") {
+    const factor = Number(record.sourceFactor);
+    if (!Number.isFinite(factor) || factor <= 0) return { factor: 1, label: "Unadjusted — no source factor", basis: "No approved source-workbook factor was imported; no escalation applied." };
+    return { factor, label: "Imported source-workbook factor", basis: "Retained from the selected source record; formula semantics must be approved." };
+  }
   if (settings.method === "index") {
-    const index = INDEX_CATALOGUE.find((i) => i.id === settings.indexId) ?? INDEX_CATALOGUE[0];
+    const index = INDEX_CATALOGUE.find((i) => i.id === settings.indexId);
+    if (!index) throw new Error("The selected index is not available or approved.");
     const sourceIndex = observationFor(index, sourceYear);
     const targetIndex = observationFor(index, targetYear);
     return { factor: targetIndex / sourceIndex, label: index.name, basis: `${index.series}: ${targetIndex.toFixed(1)} / ${sourceIndex.toFixed(1)}; ${index.rationale}`, index };
   }
   if (settings.method === "annual") {
-    const annual = Number(settings.annualRate) || 0;
+    const annual = Number(settings.annualRate);
+    if (!Number.isFinite(annual) || annual < 0 || annual > 1) throw new Error("Annual assumption must be between 0 and 1.");
     const years = Math.max(0, targetYear - sourceYear);
     return { factor: Math.pow(1 + annual, years), label: "User-entered annual inflation assumption", basis: `${(annual * 100).toFixed(2)}% p.a. for ${years} future year(s); future assumption only.` };
   }
-  return { factor: 1, label: "Unrecognised method", basis: "No calculation applied." };
+  throw new Error(`Unrecognised escalation method: ${settings.method || "blank"}`);
 }
 
 export function calculatePrice(record, settings = {}) {
   const componentResult = calculateHistoricalBasis(record, settings.components ?? {});
   const escalation = escalationFor(record, settings);
   const locationFactor = Number(settings.locationFactor ?? 1);
-  const targetUnitCost = componentResult.historicalBasis * escalation.factor * locationFactor;
   const quantity = Number(settings.quantity ?? 1);
+  if (!Number.isFinite(locationFactor) || locationFactor <= 0) throw new Error("Location factor must be greater than zero.");
+  if (!Number.isFinite(quantity) || quantity < 0) throw new Error("Quantity must be zero or greater.");
+  const targetUnitCost = FixedDecimal.from(componentResult.historicalBasis).mul(escalation.factor).mul(locationFactor).toNumber();
   return {
     ...componentResult,
     escalation,
     locationFactor,
     quantity,
     targetUnitCost,
-    total: targetUnitCost * quantity,
+    total: FixedDecimal.from(targetUnitCost).mul(quantity).toNumber(),
   };
 }
 
-function normalise(value) {
-  return String(value ?? "").toLowerCase().replace(/[–—/]/g, " ").replace(/[^a-z0-9.]+/g, " ").trim();
+export function normalise(value) {
+  return String(value ?? "").toLowerCase().replace(/[–—−]/g, "-").replace(/\bkilovolt(s)?\b/g, "kv").replace(/\bmegavolt.?ampere(s)?\b/g, "mva").replace(/square\s*millimet(er|re)s?/g, "mm2").replace(/[^a-z0-9.]+/g, " ").trim();
 }
 
 function tokenMatch(query, record) {
   const haystack = normalise([record.description, record.attributes.equipmentType, ...Object.values(record.attributes)].join(" "));
   const tokens = normalise(query).split(/\s+/).filter(Boolean);
-  return tokens.filter((t) => haystack.includes(t)).length;
+  const words = new Set(haystack.split(/\s+/));
+  return tokens.filter((token) => words.has(token) || (!/^\d+(?:\.\d+)?$/.test(token) && haystack.includes(token))).length;
 }
 
 export function scoreRecord(record, filters = {}) {
@@ -306,26 +318,33 @@ export function scoreRecord(record, filters = {}) {
   if (requestedType) score += record.attributes.equipmentType === requestedType ? 35 : 0;
   if (filters.voltage && filters.voltage !== "Any voltage") score += normalise(record.attributes.voltage) === normalise(filters.voltage) ? 12 : 0;
   if (filters.rating && filters.rating !== "Any rating") score += normalise(record.attributes.rating) === normalise(filters.rating) ? 10 : 0;
-  if (filters.manufacturer && filters.manufacturer !== "Any manufacturer") score += normalise(record.attributes.manufacturer) === normalise(filters.manufacturer) ? 4 : 0;
-  if (filters.country && filters.country !== "Any country") score += record.country === filters.country ? 4 : 0;
-  const exactAttributes = [requestedType && record.attributes.equipmentType === requestedType, filters.voltage && filters.voltage !== "Any voltage" && normalise(record.attributes.voltage) === normalise(filters.voltage), filters.rating && filters.rating !== "Any rating" && normalise(record.attributes.rating) === normalise(filters.rating)].filter(Boolean).length;
-  const requestedAttributeCount = [requestedType, filters.voltage && filters.voltage !== "Any voltage", filters.rating && filters.rating !== "Any rating"].filter(Boolean).length;
-  const exact = requestedAttributeCount > 0 ? exactAttributes === requestedAttributeCount && queryHits === queryTokens.length : queryHits === queryTokens.length && queryTokens.length > 0;
-  if (record.quality === "High") score += 2;
-  if (record.country === "Kenya") score += 2;
-  return { score: Math.min(100, Math.round(score)), exact };
+  const manufacturerRequested = filters.manufacturer && filters.manufacturer !== "Any manufacturer" ? filters.manufacturer : "";
+  const countryRequested = filters.country && filters.country !== "Any country" ? filters.country : "";
+  if (manufacturerRequested && normalise(record.attributes.manufacturer) === normalise(manufacturerRequested)) score += 8;
+  if (countryRequested && normalise(record.country) === normalise(countryRequested)) score += 4;
+  const differences = [];
+  const requested = [["Equipment type", requestedType, record.attributes.equipmentType], ["Voltage", filters.voltage !== "Any voltage" ? filters.voltage : "", record.attributes.voltage], ["Rating", filters.rating !== "Any rating" ? filters.rating : "", record.attributes.rating], ["Manufacturer", manufacturerRequested, record.attributes.manufacturer], ["Country", countryRequested, record.country]];
+  for (const [label, expected, actual] of requested) if (expected && normalise(expected) !== normalise(actual)) differences.push(`${label} differs: ${actual || "missing"} vs ${expected}`);
+  const completeness = [record.description, record.year, record.currency, record.reference, record.source?.cell || record.cell, record.attributes.equipmentType].filter((value) => value && !String(value).includes("Unknown")).length;
+  score += Math.min(8, completeness);
+  if (record.quality === "High") score += 6;
+  else if (record.quality === "Medium") score += 3;
+  const allRequestedMatch = differences.length === 0 && queryHits === queryTokens.length;
+  const exact = Boolean(allRequestedMatch && (requestedType || filters.voltage !== "Any voltage" || filters.rating !== "Any rating" || queryTokens.length > 0));
+  const strong = !exact && differences.length <= 1 && queryHits >= Math.max(1, queryTokens.length - 1) && completeness >= 4;
+  return { score: Math.min(100, Math.round(score)), exact, matchClass: exact ? "Exact source match" : strong ? "Strong technical match" : "Similar / closest available", differences, scoreBreakdown: { queryHits, completeness, quality: record.quality || "Unknown" } };
 }
 
 export function searchRecords(records, filters = {}) {
   const requestedType = filters.equipmentType && filters.equipmentType !== "All equipment" ? filters.equipmentType : "";
   return records
     .map((record) => ({ record, ...scoreRecord(record, filters) }))
-    .filter((result) => (!requestedType || result.record.attributes.equipmentType === requestedType) && (result.score > 0 || (!filters.query && (!filters.equipmentType || filters.equipmentType === "All equipment"))))
-    .sort((a, b) => b.score - a.score || b.record.year - a.record.year);
+    .filter((result) => (!requestedType || normalise(result.record.attributes.equipmentType) === normalise(requestedType)) && (!filters.manufacturer || filters.manufacturer === "Any manufacturer" || normalise(result.record.attributes.manufacturer) === normalise(filters.manufacturer)) && (!filters.country || filters.country === "Any country" || normalise(result.record.country) === normalise(filters.country)) && (result.score > 0 || (!filters.query && !requestedType)))
+    .sort((a, b) => b.score - a.score || Number(b.record.year) - Number(a.record.year));
 }
 
-export function formatMoney(value, digits = 0) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: digits, minimumFractionDigits: digits }).format(Number(value) || 0);
+export function formatMoney(value, digits = 0, currency = "USD") {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD", maximumFractionDigits: digits, minimumFractionDigits: digits }).format(Number(value) || 0);
 }
 
 export function formatNumber(value, digits = 0) {
